@@ -139,7 +139,7 @@ jobs:
           glslangValidator --version
       - name: Build APK
         env:
-          GIT_TAG_NAME: ns2-v0.1.0-alpha.6-androidfix1
+          GIT_TAG_NAME: ns2-v0.1.0-alpha.6-androidfix2
         run: |
           # Keep compiler warnings visible without treating all warnings as fatal
           # in this experimental Android port. Actual compilation/link errors still fail.
