@@ -30,9 +30,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     outputs:
-      changed: ${{ steps.merge.outputs.changed }
-      commit: ${{ steps.merge.outputs.commit }
-      upstream: ${{ steps.merge.outputs.upstream }
+      changed: ${{ steps.merge.outputs.changed }}
+      commit: ${{ steps.merge.outputs.commit }}
+      upstream: ${{ steps.merge.outputs.upstream }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -56,7 +56,7 @@ jobs:
           echo "Upstream main: $UPSTREAM_SHA"
           if git merge-base --is-ancestor "$UPSTREAM_SHA" HEAD; then
             echo "No new upstream commits. No automatic build or release."
-            if [ "${{ inputs.force_rebuild || false }" = "true" ]; then
+            if [ "${{ inputs.force_rebuild || false }}" = "true" ]; then
               echo "Manual force_rebuild selected."
               echo "changed=true" >> "$GITHUB_OUTPUT"
             else
@@ -199,13 +199,13 @@ jobs:
           printf '%s\n' \
             "Eden-NS2 experimental Linux x86_64 build (Ubuntu 24.04)." \
             "This is NOT an AppImage; compatible system Qt, FFmpeg, Vulkan and other runtime libraries are required." \
-            "No games, firmware or keys included. Source: $EDEN_SOURCE_REF" \
+            "No games, firmware or keys included. Source: ${{ needs.sync.outputs.commit }}" \
             > dist/linux/README-REQUIREMENTS.txt
           tar -czf dist/packages/Eden-NS2-Linux-x64-Ubuntu24.04.tar.gz -C dist/linux .
           test -s dist/packages/Eden-NS2-Linux-x64-Ubuntu24.04.tar.gz
       - uses: actions/upload-artifact@v4
         with:
-          name: experimental-linux-x64
+          name: package-linux-x64
           path: dist/packages/*.tar.gz
           if-no-files-found: error
           retention-days: 7
@@ -228,10 +228,10 @@ jobs:
       - name: Verify both packages and publish GitHub Release
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }
-          GH_REPO: ${{ github.repository }
-          SOURCE_SHA: ${{ needs.sync.outputs.commit }
-          UPSTREAM_SHA: ${{ needs.sync.outputs.upstream }
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          SOURCE_SHA: ${{ needs.sync.outputs.commit }}
+          UPSTREAM_SHA: ${{ needs.sync.outputs.upstream }}
         run: |
           set -euo pipefail
           cd dist
