@@ -22,7 +22,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: eden-ns2-publish-${{ github.ref }
+  group: eden-ns2-publish-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -147,7 +147,7 @@ jobs:
           retention-days: 7
 
   android:
-    name: Android ARM64 (${{ matrix.flavor })
+    name: Android ARM64 (${{ matrix.flavor }})
     runs-on: ubuntu-24.04
     timeout-minutes: 300
     continue-on-error: true
@@ -173,16 +173,16 @@ jobs:
         env:
           GIT_TAG_NAME: ns2-experimental
         run: |
-          bash .ci/android/build.sh --target "${{ matrix.flavor }" --build-type Release
+          bash .ci/android/build.sh --target "${{ matrix.flavor }}" --build-type Release
           mkdir -p dist/packages
           find artifacts -type f -name '*.apk' -print -exec cp '{}' dist/packages/ ';'
           test -n "$(find dist/packages -maxdepth 1 -name '*.apk' -print -quit)"
           for apk in dist/packages/*.apk; do
-            mv "$apk" "dist/packages/Eden-NS2-Android-${{ matrix.flavor }-arm64.apk"
+            mv "$apk" "dist/packages/Eden-NS2-Android-${{ matrix.flavor }}-arm64.apk"
           done
       - uses: actions/upload-artifact@v4
         with:
-          name: package-android-${{ matrix.flavor }
+          name: package-android-${{ matrix.flavor }}
           path: dist/packages/*.apk
           if-no-files-found: error
           retention-days: 7
@@ -233,9 +233,9 @@ jobs:
           merge-multiple: true
       - name: Check artifacts and publish
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }
-          GH_REPO: ${{ github.repository }
-          RELEASE_TAG: ${{ inputs.tag }
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag }}
         shell: bash
         run: |
           set -euo pipefail
