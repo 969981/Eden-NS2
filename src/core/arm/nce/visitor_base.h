@@ -27,6 +27,30 @@ public:
 
     virtual ~VisitorBase() {}
 
+    // Dynarmic's ARMv8.3/8.5 decoder has consolidated patterns used by the
+    // Switch 2 backend. The NCE signal-fault interpreter only emulates selected
+    // load/store instructions. Keep the additional patterns explicitly
+    // unsupported here: returning false leaves the fault unhandled instead of
+    // silently pretending a branch, tagged access or atomic operation worked.
+    // Signatures must match the variable fields in dynarmic's a64.inc.
+    virtual bool BRA_BLRA(bool Z, bool L, bool M, Reg Rn, Reg Rm) {
+        return false;
+    }
+    virtual bool STG_family(Imm<2> op, Imm<9> imm9, Imm<2> mode, Reg Rn, Reg Rt) {
+        return false;
+    }
+    virtual bool STGP(Imm<2> mode, Imm<7> imm7, Reg Rt2, Reg Rn, Reg Rt) {
+        return false;
+    }
+    virtual bool AtomicMemOp(Imm<2> size, bool acquire, bool release, Reg Rs, Imm<4> op,
+                              Reg Rn, Reg Rt) {
+        return false;
+    }
+    virtual bool CompareAndSwapPair(bool size, bool acquire, Reg Rs, bool order,
+                                    Reg Rn, Reg Rt) {
+        return false;
+    }
+
     virtual bool UnallocatedEncoding() {
         return false;
     }
