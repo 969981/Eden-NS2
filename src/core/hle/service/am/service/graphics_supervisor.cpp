@@ -844,7 +844,8 @@ private:
                 bool complete = true;
                 for (u32 i = 0; i < fence->num_fences; ++i) {
                     const auto& point = fence->fences[i];
-                    if (point.id != ~u32{0}) {
+                    // The invalid syncpoint ID is -1 (signed in the native fence record).
+                    if (point.id != -1) {
                         const auto counter = m_images->module->GetContainer().GetSyncpointManager().ReadAllocatedSyncpoint(point.id);
                         if (!counter || static_cast<s32>(*counter - point.value) < 0) {
                             complete = false;
