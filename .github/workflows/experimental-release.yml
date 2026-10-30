@@ -123,6 +123,7 @@ jobs:
             -DYUZU_ROOM=OFF -DYUZU_CMD=OFF -DENABLE_LIBUSB=OFF \
             -DENABLE_UPDATE_CHECKER=OFF \
             -DYUZU_USE_BUNDLED_SDL3=ON -Denet_FORCE_BUNDLED=ON \
+            -Dfmt_FORCE_BUNDLED=ON \
             -DVulkanMemoryAllocator_FORCE_BUNDLED=ON \
             -DVulkanUtilityLibraries_FORCE_BUNDLED=ON
           cmake --build build --target yuzu --parallel 4
