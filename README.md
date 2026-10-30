@@ -5,22 +5,29 @@ Nintendo Switch 2 games.
 
 ![Donkey Kong Bananza gameplay](docs/ns2/screenshots/bananza-gameplay.png)
 
-![Pokémon Pokopia first-run screen](docs/ns2/screenshots/pokopia-boot.png)
+![Mario Kart World gameplay](docs/ns2/screenshots/mario-kart-world-gameplay.png)
 
 ## Status
 
 | Game | State |
 | --- | --- |
-| Donkey Kong Bananza (`040074A01BF12000`, v7.0.0) | Gameplay, 3D world renders |
-| Mario Kart World (`0400C3F00006E000`, v1.8.0) | Reaches the 3D attract scene |
-| Pokémon Pokopia (`0400A3A01EE4C000`) | Gameplay, 3D world renders |
+| Donkey Kong Bananza (`040074A01BF12000`, v7.0.0) | Playable; destructible terrain renders black |
+| Mario Kart World (`0400C3F00006E000`, v1.8.0) | Playable in Free Roam; Grand Prix hangs on a black screen |
+| Pokémon Pokopia (`0400A3A01EE4C000`) | Playable; stable 60 FPS, glitched textures |
+| Splatoon Raiders | Playable; crashes on loading screens |
+| Nintendo Switch 2 Welcome Tour | Boots to a black screen |
 
 ### Known issues
 
-- **Donkey Kong Bananza:** some destructible terrain is drawn as black patches.
-- **Mario Kart World:** the first run compiles shaders for several minutes on the loading map.
-  On GPUs with less than 8 GB of video memory, set ASTC recompression to BC3 for it. Some
-  geometry (task/mesh shaders) is missing.
+- **Performance:** still a work in progress; expect slowdowns and stutter.
+- **Donkey Kong Bananza:** destructible terrain is drawn black on NVIDIA and appears to be completely
+  invisible on AMD.
+- **Mario Kart World:** loading into a Grand Prix hangs on a black screen.
+  Recommended per-game settings: GPU accuracy Low, asynchronous shaders on, and ASTC
+  recompression BC3 (needed on GPUs with less than 8 GB of video memory). Some geometry
+  (task/mesh shaders) is missing.
+- **Splatoon Raiders:** runs well in-game, but crashes on loading screens.
+- **Nintendo Switch 2 Welcome Tour:** launches, but only shows a black screen.
 
 ## Building (Windows, MSYS2 MINGW64)
 
