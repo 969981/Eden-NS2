@@ -163,7 +163,6 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-      - uses: android-actions/setup-android@v3
       - name: Install Android SDK dependencies
         run: |
           yes | sdkmanager --licenses >/dev/null || true
@@ -190,7 +189,7 @@ jobs:
   macos:
     name: macOS ARM64 (experimental)
     if: github.event_name == 'workflow_dispatch' && inputs.build_macos
-    runs-on: macos-15
+    runs-on: macos-15-arm64
     timeout-minutes: 300
     continue-on-error: true
     steps:
