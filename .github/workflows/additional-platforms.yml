@@ -1,6 +1,7 @@
 name: Eden-NS2 additional platforms (experimental)
 
-# Builds use the SAME emulator sources as the working Windows alpha.6 release.
+# Linux/macOS build from the pinned Windows alpha.6 source revision.
+# Android builds from this workflow commit, including an Android-specific nodiscard fix.
 # This workflow does not modify or rebuild the Windows release.
 on:
   workflow_dispatch:
@@ -101,11 +102,11 @@ jobs:
     name: Android ARM64 (standard)
     runs-on: ubuntu-24.04
     timeout-minutes: 240
-    continue-on-error: true
+    continue-on-error: false
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: "${{ env.EDEN_SOURCE_REF }}"
+          ref: "${{ github.sha }}"
           submodules: recursive
       - uses: actions/setup-java@v4
         with:
@@ -138,7 +139,7 @@ jobs:
           glslangValidator --version
       - name: Build APK
         env:
-          GIT_TAG_NAME: ns2-v0.1.0-alpha.6
+          GIT_TAG_NAME: ns2-v0.1.0-alpha.6-androidfix1
         run: |
           bash .ci/android/build.sh --target standard --build-type Release
           mkdir -p dist/packages
