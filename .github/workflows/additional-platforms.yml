@@ -28,7 +28,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: eden-ns2-other-platforms-${{ github.ref }}
+  group: eden-ns2-other-platforms-${{ github.sha }}
   cancel-in-progress: false
 
 env:
@@ -38,6 +38,7 @@ env:
 jobs:
   linux:
     name: Linux x64 (Ubuntu 24.04)
+    if: github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, '[android-only]')
     runs-on: ubuntu-24.04
     timeout-minutes: 240
     continue-on-error: true
@@ -129,6 +130,12 @@ jobs:
             "ndk;28.2.13676358" "cmake;3.31.5"
           test -d "$SDK_ROOT/platforms/android-36"
           test -d "$SDK_ROOT/ndk/28.2.13676358"
+      - name: Install GLSL shader compiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y glslang-tools
+          command -v glslangValidator
+          glslangValidator --version
       - name: Build APK
         env:
           GIT_TAG_NAME: ns2-v0.1.0-alpha.6
@@ -148,7 +155,7 @@ jobs:
 
   macos:
     name: macOS ARM64 (experimental)
-    if: github.event_name == 'push' || inputs.build_macos
+    if: (github.event_name == 'push' && !contains(github.event.head_commit.message, '[android-only]')) || (github.event_name == 'workflow_dispatch' && inputs.build_macos)
     runs-on: macos-15-arm64
     timeout-minutes: 240
     continue-on-error: true
@@ -217,11 +224,11 @@ jobs:
             echo "No successful other-platform builds; existing Windows release remains unchanged."
             exit 0
           fi
-          (cd dist && sha256sum *.apk *.tar.gz *.dmg 2>/dev/null > SHA256SUMS-additional-platforms.txt) || {
-            : > dist/SHA256SUMS-additional-platforms.txt
-            (cd dist && for f in *.apk *.tar.gz *.dmg; do test -f "$f" && sha256sum "$f"; done) > dist/SHA256SUMS-additional-platforms.txt
+          (cd dist && sha256sum *.apk *.tar.gz *.dmg 2>/dev/null > SHA256SUMS-additional-${GITHUB_RUN_ID}.txt) || {
+            : > dist/SHA256SUMS-additional-${GITHUB_RUN_ID}.txt
+            (cd dist && for f in *.apk *.tar.gz *.dmg; do test -f "$f" && sha256sum "$f"; done) > dist/SHA256SUMS-additional-${GITHUB_RUN_ID}.txt
           }
           gh release upload "$EDEN_TARGET_TAG" "${packages[@]}" \
-            dist/SHA256SUMS-additional-platforms.txt --clobber
+            dist/SHA256SUMS-additional-${GITHUB_RUN_ID}.txt --clobber
           echo "Uploaded the following extra platform assets:" >> "$GITHUB_STEP_SUMMARY"
           printf -- '- %s\n' "${packages[@]}" >> "$GITHUB_STEP_SUMMARY"
