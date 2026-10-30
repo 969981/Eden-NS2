@@ -1,0 +1,282 @@
+name: Eden-NS2 experimental release
+
+# Bootstrap on the first workflow commit; later releases can be started from Actions.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Optional release tag (e.g. ns2-v0.1.0-alpha.2)"
+        required: false
+        type: string
+      build_macos:
+        description: "Attempt experimental macOS ARM64 build"
+        required: false
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/experimental-release.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: eden-ns2-publish-${{ github.ref }
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    name: Windows x64 (MinGW / GUI)
+    runs-on: windows-2022
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            git autoconf automake libtool make zip unzip
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-qt6-base
+            mingw-w64-x86_64-qt6-tools
+            mingw-w64-x86_64-ffmpeg
+            mingw-w64-x86_64-sdl3
+            mingw-w64-x86_64-boost
+            mingw-w64-x86_64-openssl
+            mingw-w64-x86_64-vulkan-headers
+            mingw-w64-x86_64-vulkan-utility-libraries
+            mingw-w64-x86_64-python
+      - name: Configure and compile
+        shell: msys2 {0}
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_TESTING=OFF -DYUZU_TESTS=OFF -DENABLE_WERROR=OFF \
+            -DYUZU_ROOM=OFF -DYUZU_CMD=OFF -DENABLE_LIBUSB=OFF \
+            -DENABLE_UPDATE_CHECKER=OFF \
+            -Denet_FORCE_BUNDLED=ON -Dlibusb_FORCE_BUNDLED=ON \
+            -DVulkanMemoryAllocator_FORCE_BUNDLED=ON
+          ninja -C build yuzu
+          test -f build/bin/eden.exe
+      - name: Bundle Qt, runtime DLLs and ZIP
+        shell: msys2 {0}
+        run: |
+          set -e
+          mkdir -p dist/windows dist/packages
+          cp -a build/bin/. dist/windows/
+          command -v windeployqt6.exe
+          windeployqt6.exe --release --no-translations dist/windows/eden.exe
+          # The NS2 fork uses additional shared MinGW libraries not necessarily known to Qt.
+          for pass in 1 2 3 4; do
+            find dist/windows -type f \( -iname '*.exe' -o -iname '*.dll' \) -print0 \
+              | xargs -0 -r ldd 2>/dev/null \
+              | awk '/\/mingw64\/bin\// { print $3 }' | sort -u \
+              | while IFS= read -r dependency; do
+                  test -f "$dependency" && cp -n "$dependency" dist/windows/ || true
+                done
+          done
+          printf '[Paths]\nPlugins = plugins\n' > dist/windows/qt.conf
+          cp LICENSE.txt dist/windows/
+          (cd dist/windows && zip -qr ../packages/Eden-NS2-Windows-x64-MinGW.zip .)
+          test -s dist/packages/Eden-NS2-Windows-x64-MinGW.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-windows-x64
+          path: dist/packages/*.zip
+          if-no-files-found: error
+          retention-days: 7
+
+  linux:
+    name: Linux x64 (Ubuntu build)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            autoconf automake build-essential clang git glslang-tools libglu1-mesa-dev \
+            libhidapi-dev libpulse-dev libtool libudev-dev nasm ninja-build \
+            libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 \
+            libxcb-xinerama0 libxcb-xkb1 libxext-dev libxkbcommon-x11-0 \
+            qt6-base-dev qt6-base-private-dev qt6-tools-dev qt6-charts-dev \
+            libfmt-dev liblz4-dev nlohmann-json3-dev libzstd-dev libssl-dev \
+            libavfilter-dev libavcodec-dev libswscale-dev pkg-config zlib1g-dev \
+            libva-dev libvdpau-dev libvulkan-dev spirv-tools spirv-headers \
+            libusb-1.0-0-dev libxbyak-dev libboost-dev libboost-fiber-dev \
+            libboost-context-dev libopus-dev libasound2-dev libgl1-mesa-dev \
+            libzip-dev libzstd-dev
+          python3 -m pip install --break-system-packages "cmake>=3.31,<4"
+      - name: Configure and compile
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_TESTING=OFF -DYUZU_TESTS=OFF -DENABLE_WERROR=OFF \
+            -DYUZU_ROOM=OFF -DYUZU_CMD=OFF -DENABLE_LIBUSB=OFF \
+            -DENABLE_UPDATE_CHECKER=OFF \
+            -DYUZU_USE_BUNDLED_SDL3=ON -Denet_FORCE_BUNDLED=ON \
+            -DVulkanMemoryAllocator_FORCE_BUNDLED=ON \
+            -DVulkanUtilityLibraries_FORCE_BUNDLED=ON
+          cmake --build build --target yuzu --parallel 4
+          test -x build/bin/eden
+      - name: Package Linux executable
+        run: |
+          mkdir -p dist/linux dist/packages
+          cp -a build/bin/. dist/linux/
+          cp LICENSE.txt dist/linux/
+          cat > dist/linux/README-REQUIREMENTS.txt <<'EOF'
+          Experimental Eden-NS2 Ubuntu 24.04 x86_64 build.
+          This is not an AppImage: compatible system libraries and Vulkan drivers are required.
+          Linux compatibility has not been validated by the upstream NS2 fork.
+          EOF
+          tar -czf dist/packages/Eden-NS2-Linux-x64-Ubuntu24.04.tar.gz -C dist/linux .
+          test -s dist/packages/Eden-NS2-Linux-x64-Ubuntu24.04.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-linux-x64
+          path: dist/packages/*.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+  android:
+    name: Android ARM64 (${{ matrix.flavor })
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        flavor: [standard, optimized, legacy]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK dependencies
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager --install "platforms;android-36" "build-tools;36.0.0" \
+            "ndk;28.2.13676358" "cmake;3.31.5"
+      - name: Compile Android APK
+        env:
+          GIT_TAG_NAME: ns2-experimental
+        run: |
+          bash .ci/android/build.sh --target "${{ matrix.flavor }" --build-type Release
+          mkdir -p dist/packages
+          find artifacts -type f -name '*.apk' -print -exec cp '{}' dist/packages/ ';'
+          test -n "$(find dist/packages -maxdepth 1 -name '*.apk' -print -quit)"
+          for apk in dist/packages/*.apk; do
+            mv "$apk" "dist/packages/Eden-NS2-Android-${{ matrix.flavor }-arm64.apk"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-android-${{ matrix.flavor }
+          path: dist/packages/*.apk
+          if-no-files-found: error
+          retention-days: 7
+
+  macos:
+    name: macOS ARM64 (experimental)
+    if: github.event_name == 'workflow_dispatch' && inputs.build_macos
+    runs-on: macos-15
+    timeout-minutes: 300
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install dependencies and build
+        run: |
+          brew install cmake ninja qt ffmpeg sdl3 boost openssl@3 fmt lz4 zstd \
+            libzip opus nasm pkg-config vulkan-headers
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_TESTING=OFF -DYUZU_TESTS=OFF -DENABLE_WERROR=OFF \
+            -DYUZU_ROOM=OFF -DYUZU_CMD=OFF -DENABLE_LIBUSB=OFF \
+            -DENABLE_UPDATE_CHECKER=OFF \
+            -Denet_FORCE_BUNDLED=ON \
+            -DVulkanMemoryAllocator_FORCE_BUNDLED=ON \
+            -DVulkanUtilityLibraries_FORCE_BUNDLED=ON
+          cmake --build build --target yuzu --parallel 4
+          test -d build/bin/eden.app
+          mkdir -p dist/packages
+          hdiutil create -volname Eden-NS2 -srcfolder build/bin/eden.app \
+            -ov -format UDZO dist/packages/Eden-NS2-macOS.dmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-macos
+          path: dist/packages/*.dmg
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Publish experimental GitHub Release
+    runs-on: ubuntu-24.04
+    needs: [windows, linux, android, macos]
+    if: always() && needs.windows.result == 'success'
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: package-*
+          path: dist
+          merge-multiple: true
+      - name: Check artifacts and publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }
+          GH_REPO: ${{ github.repository }
+          RELEASE_TAG: ${{ inputs.tag }
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "$RELEASE_TAG" ]; then
+            TAG="$RELEASE_TAG"
+          else
+            TAG="ns2-v0.1.0-alpha.$GITHUB_RUN_NUMBER"
+          fi
+          if [[ ! "$TAG" =~ ^ns2-v[0-9][a-zA-Z0-9._-]*$ ]]; then
+            echo "Unsafe tag name: $TAG" >&2
+            exit 1
+          fi
+          find dist -maxdepth 1 -type f -printf '%f\n'
+          test -n "$(find dist -maxdepth 1 -type f -print -quit)"
+          (cd dist && sha256sum * > SHA256SUMS.txt)
+          cat > release-notes.md <<EOF
+          # Eden-NS2 experimental build
+
+          Based on source commit \`$GITHUB_SHA\` of \`$GITHUB_REPOSITORY\`.
+
+          **Not an official Eden release.** Early Switch 2 compatibility work;
+          game booting does not imply playability. Back up all save data.
+
+          ## Artifacts
+          - Windows x64 MinGW: portable ZIP with Qt and runtime libraries.
+          - Linux x64: Ubuntu 24.04 binary archive (not an AppImage; distro dependencies required).
+          - Android ARM64: standard, optimized and legacy APK flavors, **only if their builds succeeded**.
+            Android APKs use the repository's debug signing key unless a release keystore is configured.
+          - macOS: opt-in experimental build, only when enabled and successful.
+          - SHA256SUMS.txt: checksums for all uploaded packages.
+
+          The list of uploaded assets is authoritative: failed/skipped builds are omitted.
+          This software does **not** include Nintendo firmware, games or keys.
+
+          Upstream: https://github.com/0x2593/Eden-NS2
+          EOF
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+          else
+            gh release create "$TAG" dist/* --target "$GITHUB_SHA" \
+              --title "Eden-NS2 Experimental $TAG" \
+              --notes-file release-notes.md --prerelease
+          fi
+          echo "Published: https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG" >> "$GITHUB_STEP_SUMMARY"
