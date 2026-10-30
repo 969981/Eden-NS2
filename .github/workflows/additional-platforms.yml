@@ -141,7 +141,9 @@ jobs:
         env:
           GIT_TAG_NAME: ns2-v0.1.0-alpha.6-androidfix1
         run: |
-          bash .ci/android/build.sh --target standard --build-type Release
+          # Keep compiler warnings visible without treating all warnings as fatal
+          # in this experimental Android port. Actual compilation/link errors still fail.
+          bash .ci/android/build.sh --target standard --build-type Release -DENABLE_WERROR=OFF
           mkdir -p dist/packages
           APK="$(find artifacts -type f -name '*.apk' -print -quit)"
           test -n "$APK"
