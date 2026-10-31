@@ -64,11 +64,24 @@ jobs:
             fi
           else
             echo "New upstream commits detected. Merging normally, preserving both histories."
-            # Do not auto-resolve conflicts: fail safely without pushing.
+            # A known comment-only overlap in Ampere ATOMS.POPC is safe to resolve.
+            # All other conflicts still fail without pushing or rewriting main.
             if ! git merge --no-ff --no-edit upstream/main; then
-              git merge --abort || true
-              echo "::error::Upstream merge conflict. main was not overwritten."
-              exit 1
+              conflict_path="src/shader_recompiler/frontend/ampere/ops_memory.cpp"
+              local_comment="    // ATOMS.POPC has no destination register; the old shared value is intentionally discarded."
+              if [[ "$(git diff --name-only --diff-filter=U)" == "$conflict_path" ]] &&
+                 git show ":2:$conflict_path" | grep -Fqx "$local_comment" &&
+                 diff -q <(git show ":2:$conflict_path" | grep -Fvx "$local_comment") \
+                         <(git show ":3:$conflict_path") >/dev/null; then
+                echo "Verified comment-only ATOMS.POPC overlap; retaining the local comment and upstream fix."
+                git checkout --ours -- "$conflict_path"
+                git add -- "$conflict_path"
+                git commit --no-edit
+              else
+                git merge --abort || true
+                echo "::error::Upstream merge conflict needs manual review. main was not overwritten."
+                exit 1
+              fi
             fi
             git push origin HEAD:main
             echo "changed=true" >> "$GITHUB_OUTPUT"
