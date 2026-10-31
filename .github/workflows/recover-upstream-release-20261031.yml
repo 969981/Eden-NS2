@@ -1,0 +1,68 @@
+name: Recover validated Eden-NS2 Windows and Linux release (2026-10-31)
+
+# One-off recovery from a completed build whose release job lacked permission.
+# Automatically runs once when this workflow is added. Does not rebuild source.
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/recover-upstream-release-20261031.yml"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  recover_release:
+    name: Publish previously compiled and verified packages
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Reuse both successful build artifacts from Actions 41150727420
+        uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 41150727420
+          github-token: ${{ github.token }}
+          pattern: package-*
+          merge-multiple: true
+          path: dist
+      - name: Verify artifacts and publish upstream-synced prerelease
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.UPSTREAM_SYNC_TOKEN || github.token }}
+          GH_REPO: ${{ github.repository }}
+          SOURCE_SHA: 5a9d20bd5cb972a3da20b97d83b07db81a0bc8f8
+          UPSTREAM_SHA: e2d416602f0c2a72e3af2b6c81b40b56e6f752bd
+        run: |
+          set -euo pipefail
+          cd dist
+          WINDOWS=Eden-NS2-Windows-x64-MinGW.zip
+          LINUX=Eden-NS2-Linux-x64-Ubuntu24.04.tar.gz
+          test -s "$WINDOWS"
+          test -s "$LINUX"
+          sha256sum "$WINDOWS" "$LINUX" > SHA256SUMS.txt
+          TAG="ns2-upstream-${UPSTREAM_SHA:0:12}"
+          cat > release-notes.md <<EOF
+          # Eden-NS2 upstream-synced build
+
+          Upstream commit: $UPSTREAM_SHA
+          Local merged source: $SOURCE_SHA
+          Both packages are recovered from successful Windows and Linux builds in Actions run 41150727420.
+
+          - Windows x64 (MinGW): portable ZIP with Qt and runtime DLLs.
+          - Linux x64 (Ubuntu 24.04): TAR.GZ, not AppImage; system libraries required.
+          - SHA256SUMS.txt: package checksums.
+
+          Experimental, unofficial emulator. Back up saves. No games, firmware or keys included.
+          EOF
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$WINDOWS" "$LINUX" SHA256SUMS.txt --clobber
+          else
+            gh release create "$TAG" "$WINDOWS" "$LINUX" SHA256SUMS.txt \
+              --target "$SOURCE_SHA" \
+              --title "Eden-NS2 Upstream Sync $TAG" \
+              --notes-file release-notes.md --prerelease
+          fi
+          echo "Published recovery release: https://github.com/$GH_REPO/releases/tag/$TAG" >> "$GITHUB_STEP_SUMMARY"
