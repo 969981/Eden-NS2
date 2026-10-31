@@ -242,7 +242,7 @@ jobs:
       - name: Verify both packages and publish GitHub Release
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.UPSTREAM_SYNC_TOKEN || github.token }}
           GH_REPO: ${{ github.repository }}
           SOURCE_SHA: ${{ needs.sync.outputs.commit }}
           UPSTREAM_SHA: ${{ needs.sync.outputs.upstream }}
