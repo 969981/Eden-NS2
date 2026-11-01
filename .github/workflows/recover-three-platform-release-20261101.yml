@@ -1,0 +1,75 @@
+name: Recover validated three-platform release from run 16
+
+# One-time recovery. Reuse binaries from failed release job; never rebuild game code.
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/recover-three-platform-release-20261101.yml"]
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: eden-ns2-recover-three-platform-20261101
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    name: Recover Windows + Linux + macOS artifacts and publish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Retrieve all three successful build artifacts from run 41286763994
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ secrets.UPSTREAM_SYNC_TOKEN || github.token }}
+          repository: ${{ github.repository }}
+          run-id: 41286763994
+          pattern: package-*
+          path: dist
+          merge-multiple: true
+
+      - name: Validate packages and publish recovered release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.UPSTREAM_SYNC_TOKEN || github.token }}
+          GH_REPO: ${{ github.repository }}
+          TARGET_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          cd dist
+          WINDOWS="Eden-NS2-Windows-x64-MinGW.zip"
+          LINUX="Eden-NS2-Linux-x64-Ubuntu24.04.tar.gz"
+          MACOS="Eden-NS2-macOS-ARM64.dmg"
+          test -s "$WINDOWS"
+          test -s "$LINUX"
+          test -s "$MACOS"
+          sha256sum -c SHA256SUMS-macOS.txt
+          sha256sum "$WINDOWS" "$LINUX" "$MACOS" > SHA256SUMS.txt
+          sha256sum -c SHA256SUMS.txt
+          TAG="ns2-upstream-b2cef0c0f2e8-run-16"
+          cat > release-notes.md <<'EOF'
+          # Eden-NS2 — validated three-platform build (Actions run 16)
+
+          Built by [GitHub Actions run 41286763994](https://github.com/969981/Eden-NS2/actions/runs/41286763994) from source commit `06c82f600e694fb2cb6d1a54dbe709fbe4c84ad1` (upstream: `b2cef0c0f2e8517673233e22c929918e2c60e654`). The binaries come from that exact run; the newer release tag commit only contains CI workflow maintenance.
+
+          - Windows x64: portable ZIP with bundled runtime dependencies.
+          - Linux x64 (Ubuntu 24.04): TAR.GZ; not an AppImage.
+          - macOS ARM64 (Apple Silicon, macOS 15+): DMG; ad-hoc signed, not Apple-notarized.
+          - SHA256SUMS.txt: checksums for all three packages.
+
+          Unofficial experimental Switch 2 emulator build. Back up saves. No games, firmware, or keys included. A successful build does not guarantee game compatibility.
+          EOF
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$WINDOWS" "$LINUX" "$MACOS" SHA256SUMS.txt --clobber
+            gh release edit "$TAG" --notes-file release-notes.md
+          else
+            gh release create "$TAG" "$WINDOWS" "$LINUX" "$MACOS" SHA256SUMS.txt \
+              --target "$TARGET_SHA" \
+              --title "Eden-NS2 Three-Platform Build b2cef0c0f2e8 (run 16)" \
+              --notes-file release-notes.md --prerelease
+          fi
+          echo "Published recovered three-platform release:" >> "$GITHUB_STEP_SUMMARY"
+          echo "https://github.com/$GH_REPO/releases/tag/$TAG" >> "$GITHUB_STEP_SUMMARY"
