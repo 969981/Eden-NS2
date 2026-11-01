@@ -57,8 +57,8 @@ jobs:
           echo "Upstream main: $UPSTREAM_SHA"
           if git merge-base --is-ancestor "$UPSTREAM_SHA" HEAD; then
             echo "No new upstream commits. No automatic build or release."
-            if [ "${{ github.event_name }}" = "push" ] || [ "${{ inputs.force_rebuild || false }}" = "true" ]; then
-              echo "Workflow-file push or manual force_rebuild selected: verify all three platforms."
+            if [ "${{ inputs.force_rebuild || false }}" = "true" ]; then
+              echo "Manual force_rebuild selected: verify all three platforms."
               echo "changed=true" >> "$GITHUB_OUTPUT"
             else
               echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -313,10 +313,10 @@ jobs:
       - name: Verify three packages and publish one new GitHub Release
         shell: bash
         env:
-          GH_TOKEN: ${ secrets.UPSTREAM_SYNC_TOKEN || github.token }}
-          GH_REPO: ${ github.repository }}
-          SOURCE_SHA: ${ needs.sync.outputs.commit }}
-          UPSTREAM_SHA: ${ needs.sync.outputs.upstream }}
+          GH_TOKEN: ${{ secrets.UPSTREAM_SYNC_TOKEN || github.token }}
+          GH_REPO: ${{ github.repository }}
+          SOURCE_SHA: ${{ needs.sync.outputs.commit }}
+          UPSTREAM_SHA: ${{ needs.sync.outputs.upstream }}
         run: |
           set -euo pipefail
           cd dist
